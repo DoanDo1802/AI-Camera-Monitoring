@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+
+# Large runtime assets
+ai_camera_monitoring/assets/videos/*.mp4
+ai_camera_monitoring/assets/models/*.pt
+
+# Keep asset folders
+!ai_camera_monitoring/assets/videos/.gitkeep
+!ai_camera_monitoring/assets/models/.gitkeep

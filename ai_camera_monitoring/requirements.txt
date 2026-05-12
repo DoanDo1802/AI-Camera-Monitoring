@@ -1,0 +1,9 @@
+PyQt5
+opencv-python<4.12
+numpy<2
+ultralytics
+torch
+torchvision
+scipy
+filterpy
+lap>=0.5.12
