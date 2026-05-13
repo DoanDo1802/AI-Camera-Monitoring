@@ -25,6 +25,7 @@ class CaptureThread(QThread):
         while self.running:
             self.status_signal.emit(self.camera_index, "Connecting")
             cap = cv2.VideoCapture(self.source)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
                 self.status_signal.emit(self.camera_index, "Reconnect waiting")
                 time.sleep(CAMERA_RECONNECT_SECONDS)

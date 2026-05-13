@@ -126,7 +126,7 @@ roi_count_signal / alert_signal
 Main UI Thread
 ```
 
-`ProcessThread` nhận frame từ `CaptureThread`, chỉ crop vùng ROI rồi chạy YOLO detect trong vùng đã vẽ. `TrackingThread` nhận detection từ `ProcessThread` để gán ID, vẽ trajectory và tạo frame hiển thị cuối cùng.
+`ProcessThread` nhận frame từ `CaptureThread`, crop vùng ROI rồi chạy YOLO `model.track()` + ByteTrack trong vùng đã vẽ. `TrackingThread` nhận bbox và Track ID từ `ProcessThread`, cập nhật trajectory, vẽ overlay và tạo frame hiển thị cuối cùng.
 
 Với 4 camera:
 
@@ -183,15 +183,15 @@ Trong project hiện tại:
 
 Chức năng theo yêu cầu:
 
-- Gán ID cho từng người.
-- Theo dõi object giữa các frame.
-- Hiển thị trajectory hoặc tâm object.
+- Nhận kết quả tracking từ `ProcessThread`.
+- Cập nhật trajectory theo Track ID đã có.
+- Hiển thị bounding box, Track ID, tâm object và trajectory.
 
 Trong project hiện tại:
 
 - Nhận frame, bbox và Track ID từ `ProcessThread`.
-- Sử dụng Track ID từ ByteTrack để theo dõi object giữa các frame.
-- Vẽ bounding box, Track ID, tâm object và trajectory.
+- Không tự gán ID; Track ID được ByteTrack tạo trong `ProcessThread`.
+- Lưu danh sách tâm object gần nhất theo từng Track ID để vẽ trajectory.
 - Tính số lượng người trong frame từ danh sách tracked object.
 - Gửi frame cuối cùng về UI.
 - Tính `Process FPS`, tức FPS của output sau tracking.
@@ -263,10 +263,10 @@ Frame mới nhất được lưu bằng `QMutex` để tránh lỗi khi nhiều 
 
 ```python
 with QMutexLocker(self.mutex):
-    self.latest_frame = frame.copy()
+    self.latest_frame = frame
 ```
 
-Cách này giúp không bị dồn nhiều frame cũ, giảm độ trễ realtime.
+Khi thread xử lý lấy frame ra, `latest_frame` được đặt lại `None`. Cách này giúp không bị dồn nhiều frame cũ, giảm độ trễ realtime.
 
 ---
 
@@ -283,7 +283,7 @@ Cách hoạt động:
 1. Người dùng bấm `Draw ROI`.
 2. Kéo chuột để vẽ vùng cần theo dõi.
 3. ROI được lưu theo tọa độ frame gốc.
-4. Tracking chỉ vẽ/checking người nằm trong ROI.
+4. YOLO + ByteTrack chỉ xử lý người nằm trong ROI.
 5. `EventThread` đếm số người trong ROI.
 6. `EventThread` cảnh báo nếu người đứng trong ROI quá 10 giây.
 7. `EventThread` cảnh báo nếu số người trong ROI lớn hơn 5.
@@ -347,7 +347,7 @@ Giao diện gồm:
 
 Hạn chế:
 
-- Tracking ID có thể đổi khi người bị che khuất hoặc đứng quá gần nhau.
+- Track ID vẫn có thể đổi khi người bị che khuất lâu, ra khỏi ROI hoặc đứng quá gần nhau.
 - Chưa lưu cảnh báo ra file hoặc database.
 - Chưa test với camera RTSP thật.
 

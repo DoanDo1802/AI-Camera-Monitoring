@@ -121,7 +121,7 @@ class CameraZoomWindow(QWidget):
 
     def update_frame(self, pixmap):
         self.video_label.setPixmap(
-            pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            pixmap.scaled(self.video_label.size(), Qt.KeepAspectRatio, Qt.FastTransformation)
         )
 
 
@@ -358,8 +358,8 @@ class MainWindow(QMainWindow):
         self.zoom_windows[camera_index] = None
 
     def update_camera_frame(self, camera_index, frame):
-        display_frame = frame.copy()
         roi = self.camera_roi_rects[camera_index]
+        display_frame = frame.copy() if roi is not None else frame
         if roi is not None:
             x1, y1, x2, y2 = roi
             cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 255), 3)
@@ -380,7 +380,7 @@ class MainWindow(QMainWindow):
         pixmap = QPixmap.fromImage(image)
         view = self.camera_views[camera_index]
         view.set_frame_shape(display_frame.shape)
-        view.setPixmap(pixmap.scaled(view.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        view.setPixmap(pixmap.scaled(view.size(), Qt.KeepAspectRatio, Qt.FastTransformation))
 
         zoom_window = self.zoom_windows[camera_index]
         if zoom_window is not None:

@@ -38,7 +38,7 @@ class ProcessThread(QThread):
 
         while self.running:
             with QMutexLocker(self.mutex):
-                frame = None if self.latest_frame is None else self.latest_frame.copy()
+                frame = self.latest_frame
                 roi = self.roi
                 self.latest_frame = None
 
@@ -71,11 +71,11 @@ class ProcessThread(QThread):
             return detections
 
         for box in results[0].boxes:
-            class_id = int(box.cls[0])
-            if class_id != PERSON_CLASS_ID:
+            if box.id is None:
                 continue
 
-            if box.id is None:
+            class_id = int(box.cls[0])
+            if class_id != PERSON_CLASS_ID:
                 continue
 
             track_id = int(box.id[0])

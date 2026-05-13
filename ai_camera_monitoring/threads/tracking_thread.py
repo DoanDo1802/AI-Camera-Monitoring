@@ -23,7 +23,7 @@ class TrackingThread(QThread):
         if camera_index != self.camera_index:
             return
         with QMutexLocker(self.mutex):
-            self.latest_frame = frame.copy()
+            self.latest_frame = frame
             self.latest_detections = list(detections)
 
     def reset_tracks(self):
@@ -35,7 +35,7 @@ class TrackingThread(QThread):
         fps_counter = FPSCounter()
         while self.running:
             with QMutexLocker(self.mutex):
-                frame = None if self.latest_frame is None else self.latest_frame.copy()
+                frame = self.latest_frame
                 detections = list(self.latest_detections)
                 self.latest_frame = None
                 self.latest_detections = []
@@ -51,6 +51,14 @@ class TrackingThread(QThread):
 
     def _draw_tracks(self, frame, detections):
         annotated_frame = frame.copy()
+        tracked_objects = self._update_tracks(detections)
+
+        for tracked_object in tracked_objects:
+            self._draw_track(annotated_frame, tracked_object)
+
+        return annotated_frame, tracked_objects
+
+    def _update_tracks(self, detections):
         tracked_objects = []
         current_track_ids = set()
 
@@ -64,14 +72,12 @@ class TrackingThread(QThread):
             if len(trajectory) > TRAJECTORY_LENGTH:
                 trajectory.pop(0)
 
-            tracked_object = {**detection, "trajectory": trajectory.copy()}
-            tracked_objects.append(tracked_object)
-            self._draw_track(annotated_frame, tracked_object)
+            tracked_objects.append({**detection, "trajectory": trajectory.copy()})
 
         for track_id in set(self.trajectories.keys()) - current_track_ids:
             self.trajectories.pop(track_id, None)
 
-        return annotated_frame, tracked_objects
+        return tracked_objects
 
     def _draw_track(self, frame, tracked_object):
         x1, y1, x2, y2 = tracked_object["bbox"]

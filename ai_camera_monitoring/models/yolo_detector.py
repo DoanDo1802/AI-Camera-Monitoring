@@ -1,6 +1,7 @@
 from utils.config import (
     CONFIDENCE_THRESHOLD,
     IOU_THRESHOLD,
+    YOLO_IMAGE_SIZE,
     YOLO_MODEL_PATH,
     YOLO_PERSON_CLASSES,
     YOLO_TRACKER,
@@ -21,13 +22,7 @@ class YOLODetector:
     def detect(self, frame):
         if self.model is None:
             self.load()
-        return self.model(
-            frame,
-            conf=CONFIDENCE_THRESHOLD,
-            iou=IOU_THRESHOLD,
-            classes=YOLO_PERSON_CLASSES,
-            verbose=False,
-        )
+        return self.model(frame, **self._inference_options())
 
     def track(self, frame):
         if self.model is None:
@@ -36,8 +31,14 @@ class YOLODetector:
             frame,
             persist=True,
             tracker=self.tracker,
-            conf=CONFIDENCE_THRESHOLD,
-            iou=IOU_THRESHOLD,
-            classes=YOLO_PERSON_CLASSES,
-            verbose=False,
+            **self._inference_options(),
         )
+
+    def _inference_options(self):
+        return {
+            "conf": CONFIDENCE_THRESHOLD,
+            "iou": IOU_THRESHOLD,
+            "classes": YOLO_PERSON_CLASSES,
+            "imgsz": YOLO_IMAGE_SIZE,
+            "verbose": False,
+        }
