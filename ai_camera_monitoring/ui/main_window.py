@@ -134,6 +134,7 @@ class MainWindow(QMainWindow):
         self.camera_status_labels = []
         self.camera_fps_labels = []
         self.camera_process_fps_labels = []
+        self.camera_tracking_fps_labels = []
         self.camera_object_labels = []
         self.camera_roi_count_labels = []
         self.camera_toggle_buttons = []
@@ -196,6 +197,7 @@ class MainWindow(QMainWindow):
         status_label = QLabel("Status: Stopped")
         fps_label = QLabel("Capture: 0")
         process_fps_label = QLabel("Process: 0")
+        tracking_fps_label = QLabel("Tracking: 0")
         object_label = QLabel("Objects: 0")
         roi_count_label = QLabel("ROI: 0")
         info_layout = QHBoxLayout()
@@ -203,6 +205,7 @@ class MainWindow(QMainWindow):
         info_layout.addWidget(status_label)
         info_layout.addWidget(fps_label)
         info_layout.addWidget(process_fps_label)
+        info_layout.addWidget(tracking_fps_label)
         info_layout.addWidget(object_label)
         info_layout.addWidget(roi_count_label)
 
@@ -231,6 +234,7 @@ class MainWindow(QMainWindow):
         self.camera_status_labels.append(status_label)
         self.camera_fps_labels.append(fps_label)
         self.camera_process_fps_labels.append(process_fps_label)
+        self.camera_tracking_fps_labels.append(tracking_fps_label)
         self.camera_object_labels.append(object_label)
         self.camera_roi_count_labels.append(roi_count_label)
         self.camera_toggle_buttons.append(toggle_button)
@@ -267,7 +271,8 @@ class MainWindow(QMainWindow):
         process_thread.processed_signal.connect(tracking_thread.set_processed_frame)
         capture_thread.fps_signal.connect(self.update_camera_fps)
         capture_thread.status_signal.connect(self.update_camera_status)
-        tracking_thread.fps_signal.connect(self.update_process_fps)
+        process_thread.fps_signal.connect(self.update_process_fps)
+        tracking_thread.fps_signal.connect(self.update_tracking_fps)
         tracking_thread.tracked_frame_signal.connect(self.update_camera_frame)
         tracking_thread.tracking_data_signal.connect(self.update_tracking_data)
 
@@ -302,6 +307,7 @@ class MainWindow(QMainWindow):
         self.camera_status_labels[camera_index].setText("Status: Stopped")
         self.camera_fps_labels[camera_index].setText("Capture: 0")
         self.camera_process_fps_labels[camera_index].setText("Process: 0")
+        self.camera_tracking_fps_labels[camera_index].setText("Tracking: 0")
         self.camera_object_labels[camera_index].setText("Objects: 0")
         self.camera_roi_count_labels[camera_index].setText("ROI: 0")
         self.update_total_object_count()
@@ -391,6 +397,9 @@ class MainWindow(QMainWindow):
 
     def update_process_fps(self, camera_index, fps):
         self.camera_process_fps_labels[camera_index].setText(f"Process: {fps:.1f}")
+
+    def update_tracking_fps(self, camera_index, fps):
+        self.camera_tracking_fps_labels[camera_index].setText(f"Tracking: {fps:.1f}")
 
     def update_camera_status(self, camera_index, status):
         self.camera_status_labels[camera_index].setText(f"Status: {status}")

@@ -128,14 +128,40 @@ Main UI Thread
 
 `ProcessThread` nhận frame từ `CaptureThread`, crop vùng ROI rồi chạy YOLO `model.track()` + ByteTrack trong vùng đã vẽ. `TrackingThread` nhận bbox và Track ID từ `ProcessThread`, cập nhật trajectory, vẽ overlay và tạo frame hiển thị cuối cùng.
 
-Với 4 camera:
+### Cách tổ chức đa luồng
+
+Ứng dụng không xử lý video trực tiếp trong Main UI Thread. Main UI Thread chỉ nhận kết quả cuối cùng để cập nhật giao diện. Các việc nặng như đọc camera, chạy YOLO/ByteTrack, vẽ tracking và kiểm tra cảnh báo được tách sang các `QThread` riêng.
+
+Nếu chỉ có 1 camera, hệ thống tạo một pipeline riêng cho camera đó:
 
 ```text
-Camera 1 → CaptureThread → ProcessThread → TrackingThread → UI + EventThread
-Camera 2 → CaptureThread → ProcessThread → TrackingThread → UI + EventThread
-Camera 3 → CaptureThread → ProcessThread → TrackingThread → UI + EventThread
-Camera 4 → CaptureThread → ProcessThread → TrackingThread → UI + EventThread
+Camera 1
+   ↓
+CaptureThread 1: đọc frame từ RTSP/video
+   ↓
+ProcessThread 1: crop ROI, chạy YOLO + ByteTrack
+   ↓
+TrackingThread 1: vẽ bbox, ID, trajectory
+   ↓
+Main UI Thread: hiển thị frame cuối cùng
 ```
+
+Với cách này, khi YOLO xử lý chậm hoặc camera bị mất kết nối, giao diện vẫn không bị treo vì phần đọc frame và AI không chạy trong UI thread.
+
+Nếu có nhiều camera, mỗi camera có một bộ thread riêng:
+
+```text
+Camera 1 → CaptureThread 1 → ProcessThread 1 → TrackingThread 1 → UI
+Camera 2 → CaptureThread 2 → ProcessThread 2 → TrackingThread 2 → UI
+Camera 3 → CaptureThread 3 → ProcessThread 3 → TrackingThread 3 → UI
+Camera 4 → CaptureThread 4 → ProcessThread 4 → TrackingThread 4 → UI
+```
+
+Các pipeline này chạy song song. Camera 1 xử lý chậm không làm Camera 2, Camera 3 hoặc Camera 4 phải chờ. Mỗi thread phát signal kèm `camera_index`, nhờ đó Main UI Thread biết frame, FPS, object count hoặc cảnh báo thuộc về camera nào.
+
+`EventThread` được tách riêng để xử lý cảnh báo ROI. Thread này nhận dữ liệu tracking từ các camera thông qua `tracking_data_signal`, sau đó kiểm tra người trong ROI, thời gian đứng lâu và tình trạng đông người. Nhờ vậy logic cảnh báo không làm chậm luồng đọc frame hoặc luồng tracking.
+
+Cách dùng `latest_frame` buffer giúp mỗi thread chỉ giữ frame mới nhất. Nếu AI xử lý chậm hơn tốc độ camera, frame cũ sẽ bị bỏ qua thay vì xếp hàng dài. Điều này giảm độ trễ realtime, phù hợp với ứng dụng giám sát camera.
 
 ---
 

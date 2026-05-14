@@ -122,17 +122,14 @@ rtsp://127.0.0.1:8554/camera_3
 rtsp://127.0.0.1:8554/camera_4
 ```
 
-Dừng server bằng `Ctrl + C`.
 
 ## Chạy ứng dụng
 
-Mở terminal khác và chạy:
 
 ```bash
 python ai_camera_monitoring/main.py
 ```
 
-Ứng dụng sẽ tự start các camera khi mở.
 
 ## Luồng xử lý
 
