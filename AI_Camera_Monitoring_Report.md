@@ -163,6 +163,42 @@ Các pipeline này chạy song song. Camera 1 xử lý chậm không làm Camera
 
 Cách dùng `latest_frame` buffer giúp mỗi thread chỉ giữ frame mới nhất. Nếu AI xử lý chậm hơn tốc độ camera, frame cũ sẽ bị bỏ qua thay vì xếp hàng dài. Điều này giảm độ trễ realtime, phù hợp với ứng dụng giám sát camera.
 
+### Tính độ trễ toàn pipeline
+
+Độ trễ toàn pipeline được tính từ lúc `CaptureThread` đẩy frame đầu vào cho đến lúc `Main UI Thread` nhận frame cuối cùng để hiển thị:
+
+```text
+RTSP / Video file
+   ↓
+CaptureThread: đọc frame và gắn timestamp
+   ↓
+ProcessThread: crop ROI, chạy YOLO + tracker
+   ↓
+TrackingThread: vẽ bbox, ID, trajectory
+   ↓
+Main UI Thread: tính latency và hiển thị frame
+```
+
+Khi `CaptureThread` emit frame, hệ thống gửi kèm thời điểm bắt đầu bằng `time.perf_counter()`:
+
+```python
+frame_signal.emit(camera_index, (frame, time.perf_counter()))
+```
+
+Timestamp này đi cùng frame qua `ProcessThread` và `TrackingThread`. Khi `Main UI Thread` nhận frame đã tracking, độ trễ được tính theo công thức:
+
+```python
+latency_ms = (time.perf_counter() - frame_time) * 1000
+```
+
+Giá trị này được hiển thị trên từng camera cạnh các chỉ số FPS:
+
+```text
+Capture: 24.8 | Process: 7.3 | Tracking: 7.3 | Latency: 136 ms
+```
+
+Chỉ số này phản ánh độ trễ xử lý nội bộ của ứng dụng, gồm thời gian truyền frame giữa các thread, thời gian chạy YOLO/tracker, thời gian vẽ overlay và thời gian frame tới UI. Nó không bao gồm toàn bộ độ trễ mạng RTSP trước khi OpenCV đọc được frame.
+
 ---
 
 ## 6. Các thread chính

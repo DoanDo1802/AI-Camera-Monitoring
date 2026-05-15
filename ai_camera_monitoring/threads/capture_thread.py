@@ -9,6 +9,7 @@ from utils.fps import FPSCounter
 
 class CaptureThread(QThread):
     frame_signal = pyqtSignal(int, object)
+    direct_frame_signal = pyqtSignal(int, object, float)
     fps_signal = pyqtSignal(int, float)
     status_signal = pyqtSignal(int, str)
 
@@ -28,7 +29,7 @@ class CaptureThread(QThread):
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
                 self.status_signal.emit(self.camera_index, "Reconnect waiting")
-                time.sleep(CAMERA_RECONNECT_SECONDS)
+                self._wait_for_reconnect_delay()
                 continue
 
             ok, frame = cap.read()
@@ -44,7 +45,9 @@ class CaptureThread(QThread):
             self.status_signal.emit(self.camera_index, "Playing")
 
             while self.running and cap.isOpened():
-                self.frame_signal.emit(self.camera_index, frame)
+                frame_time = time.perf_counter()
+                self.frame_signal.emit(self.camera_index, (frame, frame_time))
+                self.direct_frame_signal.emit(self.camera_index, frame, frame_time)
                 self.fps_signal.emit(self.camera_index, fps_counter.update())
 
                 next_frame_time += frame_interval
@@ -59,7 +62,12 @@ class CaptureThread(QThread):
 
             cap.release()
             if self.running:
-                time.sleep(CAMERA_RECONNECT_SECONDS)
+                self._wait_for_reconnect_delay()
+
+    def _wait_for_reconnect_delay(self):
+        deadline = time.monotonic() + CAMERA_RECONNECT_SECONDS
+        while self.running and time.monotonic() < deadline:
+            self.msleep(100)
 
     def stop(self):
         self.running = False

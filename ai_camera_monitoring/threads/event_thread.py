@@ -2,11 +2,10 @@ import time
 
 from PyQt5.QtCore import QMutex, QMutexLocker, QThread, pyqtSignal
 
-from utils.config import ROI_CROWDED_THRESHOLD, ROI_LOITERING_SECONDS
+from utils.config import ROI_CROWDED_THRESHOLD, ROI_LOITERING_SECONDS, ROI_MISSING_GRACE_SECONDS
 
 
 class EventThread(QThread):
-    roi_count_signal = pyqtSignal(int, int)
     alert_signal = pyqtSignal(str)
 
     def __init__(self, camera_count, parent=None):
@@ -17,6 +16,7 @@ class EventThread(QThread):
         self.roi_rects = [None] * camera_count
         self.latest_tracking_data = [None] * camera_count
         self.roi_entry_times = [{} for _ in range(camera_count)]
+        self.roi_last_seen_times = [{} for _ in range(camera_count)]
         self.roi_last_alert_times = [{} for _ in range(camera_count)]
         self.roi_crowded_alerting = [False] * camera_count
 
@@ -30,7 +30,6 @@ class EventThread(QThread):
             self.roi_rects[camera_index] = None
             self.latest_tracking_data[camera_index] = None
             self._reset_camera_state(camera_index)
-        self.roi_count_signal.emit(camera_index, 0)
 
     def set_tracking_data(self, camera_index, tracked_objects):
         with QMutexLocker(self.mutex):
@@ -60,6 +59,7 @@ class EventThread(QThread):
 
     def _reset_camera_state(self, camera_index):
         self.roi_entry_times[camera_index].clear()
+        self.roi_last_seen_times[camera_index].clear()
         self.roi_last_alert_times[camera_index].clear()
         self.roi_crowded_alerting[camera_index] = False
 
@@ -75,6 +75,7 @@ class EventThread(QThread):
                 continue
 
             current_roi_ids.add(track_id)
+            self.roi_last_seen_times[camera_index][track_id] = now
             if track_id not in self.roi_entry_times[camera_index]:
                 self.roi_entry_times[camera_index][track_id] = now
 
@@ -97,7 +98,10 @@ class EventThread(QThread):
 
         previous_roi_ids = set(self.roi_entry_times[camera_index].keys())
         for track_id in previous_roi_ids - current_roi_ids:
+            last_seen = self.roi_last_seen_times[camera_index].get(track_id, 0)
+            if now - last_seen <= ROI_MISSING_GRACE_SECONDS:
+                continue
             self.roi_entry_times[camera_index].pop(track_id, None)
+            self.roi_last_seen_times[camera_index].pop(track_id, None)
             self.roi_last_alert_times[camera_index].pop(track_id, None)
 
-        self.roi_count_signal.emit(camera_index, len(current_roi_ids))

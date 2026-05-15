@@ -135,8 +135,8 @@ class MainWindow(QMainWindow):
         self.camera_fps_labels = []
         self.camera_process_fps_labels = []
         self.camera_tracking_fps_labels = []
+        self.camera_latency_labels = []
         self.camera_object_labels = []
-        self.camera_roi_count_labels = []
         self.camera_toggle_buttons = []
         self.camera_zoom_buttons = []
         self.camera_roi_buttons = []
@@ -148,7 +148,6 @@ class MainWindow(QMainWindow):
         self.process_threads = [None] * len(CAMERA_SOURCES)
         self.tracking_threads = [None] * len(CAMERA_SOURCES)
         self.event_thread = EventThread(len(CAMERA_SOURCES))
-        self.event_thread.roi_count_signal.connect(self.update_roi_count)
         self.event_thread.alert_signal.connect(self.show_alert)
         self.event_thread.start()
         self.auto_started = False
@@ -198,16 +197,16 @@ class MainWindow(QMainWindow):
         fps_label = QLabel("Capture: 0")
         process_fps_label = QLabel("Process: 0")
         tracking_fps_label = QLabel("Tracking: 0")
+        latency_label = QLabel("Latency: 0 ms")
         object_label = QLabel("Objects: 0")
-        roi_count_label = QLabel("ROI: 0")
         info_layout = QHBoxLayout()
         info_layout.setSpacing(10)
         info_layout.addWidget(status_label)
         info_layout.addWidget(fps_label)
         info_layout.addWidget(process_fps_label)
         info_layout.addWidget(tracking_fps_label)
+        info_layout.addWidget(latency_label)
         info_layout.addWidget(object_label)
-        info_layout.addWidget(roi_count_label)
 
         button_layout = QHBoxLayout()
         button_layout.setSpacing(6)
@@ -235,8 +234,8 @@ class MainWindow(QMainWindow):
         self.camera_fps_labels.append(fps_label)
         self.camera_process_fps_labels.append(process_fps_label)
         self.camera_tracking_fps_labels.append(tracking_fps_label)
+        self.camera_latency_labels.append(latency_label)
         self.camera_object_labels.append(object_label)
-        self.camera_roi_count_labels.append(roi_count_label)
         self.camera_toggle_buttons.append(toggle_button)
         self.camera_zoom_buttons.append(zoom_button)
         self.camera_roi_buttons.append(roi_button)
@@ -268,6 +267,7 @@ class MainWindow(QMainWindow):
             process_thread.set_roi(roi)
 
         capture_thread.frame_signal.connect(process_thread.set_frame)
+        capture_thread.direct_frame_signal.connect(self.update_direct_camera_frame)
         process_thread.processed_signal.connect(tracking_thread.set_processed_frame)
         capture_thread.fps_signal.connect(self.update_camera_fps)
         capture_thread.status_signal.connect(self.update_camera_status)
@@ -308,8 +308,8 @@ class MainWindow(QMainWindow):
         self.camera_fps_labels[camera_index].setText("Capture: 0")
         self.camera_process_fps_labels[camera_index].setText("Process: 0")
         self.camera_tracking_fps_labels[camera_index].setText("Tracking: 0")
+        self.camera_latency_labels[camera_index].setText("Latency: 0 ms")
         self.camera_object_labels[camera_index].setText("Objects: 0")
-        self.camera_roi_count_labels[camera_index].setText("ROI: 0")
         self.update_total_object_count()
         self.camera_views[camera_index].clear()
         self.camera_views[camera_index].setText(
@@ -335,7 +335,6 @@ class MainWindow(QMainWindow):
         if tracking_thread is not None:
             tracking_thread.reset_tracks()
         self.event_thread.set_roi(camera_index, roi)
-        self.camera_roi_count_labels[camera_index].setText("ROI: 0")
         self.camera_status_labels[camera_index].setText("Status: ROI ready")
 
     def clear_camera_roi(self, camera_index):
@@ -347,8 +346,12 @@ class MainWindow(QMainWindow):
         if tracking_thread is not None:
             tracking_thread.reset_tracks()
         self.event_thread.clear_roi(camera_index)
-        self.camera_roi_count_labels[camera_index].setText("ROI: 0")
+        self.camera_process_fps_labels[camera_index].setText("Process: 0")
+        self.camera_tracking_fps_labels[camera_index].setText("Tracking: 0")
+        self.camera_latency_labels[camera_index].setText("Latency: 0 ms")
+        self.camera_object_labels[camera_index].setText("Objects: 0")
         self.camera_views[camera_index].clear_preview()
+        self.update_total_object_count()
 
     def open_zoom_window(self, camera_index):
         if self.zoom_windows[camera_index] is None:
@@ -363,7 +366,11 @@ class MainWindow(QMainWindow):
     def clear_zoom_window(self, camera_index):
         self.zoom_windows[camera_index] = None
 
-    def update_camera_frame(self, camera_index, frame):
+    def update_direct_camera_frame(self, camera_index, frame, _frame_time):
+        if self.camera_roi_rects[camera_index] is None:
+            self.update_camera_frame(camera_index, frame, _frame_time)
+
+    def update_camera_frame(self, camera_index, frame, frame_time=None):
         roi = self.camera_roi_rects[camera_index]
         display_frame = frame.copy() if roi is not None else frame
         if roi is not None:
@@ -392,6 +399,10 @@ class MainWindow(QMainWindow):
         if zoom_window is not None:
             zoom_window.update_frame(pixmap)
 
+        if frame_time is not None:
+            latency_ms = (time.perf_counter() - frame_time) * 1000
+            self.camera_latency_labels[camera_index].setText(f"Latency: {latency_ms:.1f} ms")
+
     def update_camera_fps(self, camera_index, fps):
         self.camera_fps_labels[camera_index].setText(f"Capture: {fps:.1f}")
 
@@ -419,9 +430,6 @@ class MainWindow(QMainWindow):
         self.camera_object_labels[camera_index].setText(f"Objects: {len(tracked_ids)}")
         self.event_thread.set_tracking_data(camera_index, tracked_objects)
         self.update_total_object_count()
-
-    def update_roi_count(self, camera_index, count):
-        self.camera_roi_count_labels[camera_index].setText(f"ROI: {count}")
 
     def show_alert(self, message):
         self.alert_label.setText(f"Alert: {message}")

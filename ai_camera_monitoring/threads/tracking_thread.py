@@ -6,7 +6,7 @@ from utils.fps import FPSCounter
 
 
 class TrackingThread(QThread):
-    tracked_frame_signal = pyqtSignal(int, object)
+    tracked_frame_signal = pyqtSignal(int, object, float)
     tracking_data_signal = pyqtSignal(int, list)
     fps_signal = pyqtSignal(int, float)
 
@@ -15,15 +15,17 @@ class TrackingThread(QThread):
         self.camera_index = camera_index
         self.running = False
         self.latest_frame = None
+        self.latest_frame_time = 0.0
         self.latest_detections = []
         self.mutex = QMutex()
         self.trajectories = {}
 
-    def set_processed_frame(self, camera_index, frame, detections):
+    def set_processed_frame(self, camera_index, frame, detections, frame_time):
         if camera_index != self.camera_index:
             return
         with QMutexLocker(self.mutex):
             self.latest_frame = frame
+            self.latest_frame_time = frame_time
             self.latest_detections = list(detections)
 
     def reset_tracks(self):
@@ -36,6 +38,7 @@ class TrackingThread(QThread):
         while self.running:
             with QMutexLocker(self.mutex):
                 frame = self.latest_frame
+                frame_time = self.latest_frame_time
                 detections = list(self.latest_detections)
                 self.latest_frame = None
                 self.latest_detections = []
@@ -44,8 +47,14 @@ class TrackingThread(QThread):
                 self.msleep(TRACKING_SLEEP_MS)
                 continue
 
+            if not detections:
+                self.tracked_frame_signal.emit(self.camera_index, frame, frame_time)
+                self.tracking_data_signal.emit(self.camera_index, [])
+                self.fps_signal.emit(self.camera_index, fps_counter.update())
+                continue
+
             tracked_frame, tracked_objects = self._draw_tracks(frame, detections)
-            self.tracked_frame_signal.emit(self.camera_index, tracked_frame)
+            self.tracked_frame_signal.emit(self.camera_index, tracked_frame, frame_time)
             self.tracking_data_signal.emit(self.camera_index, tracked_objects)
             self.fps_signal.emit(self.camera_index, fps_counter.update())
 

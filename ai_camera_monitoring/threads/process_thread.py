@@ -6,7 +6,7 @@ from utils.fps import FPSCounter
 
 
 class ProcessThread(QThread):
-    processed_signal = pyqtSignal(int, object, list)
+    processed_signal = pyqtSignal(int, object, list, float)
     fps_signal = pyqtSignal(int, float)
 
     def __init__(self, camera_index, parent=None):
@@ -14,15 +14,21 @@ class ProcessThread(QThread):
         self.camera_index = camera_index
         self.running = False
         self.latest_frame = None
+        self.latest_frame_time = 0.0
         self.roi = None
         self.mutex = QMutex()
         self.detector = YOLODetector()
 
-    def set_frame(self, camera_index, frame):
+    def set_frame(self, camera_index, frame_data):
         if camera_index != self.camera_index:
             return
+        frame, frame_time = frame_data
         with QMutexLocker(self.mutex):
+            if self.roi is None:
+                self.latest_frame = None
+                return
             self.latest_frame = frame.copy()
+            self.latest_frame_time = frame_time
 
     def set_roi(self, roi):
         with QMutexLocker(self.mutex):
@@ -36,18 +42,30 @@ class ProcessThread(QThread):
         self.running = True
         fps_counter = FPSCounter()
 
+        roi_active = False
         while self.running:
             with QMutexLocker(self.mutex):
                 frame = self.latest_frame
+                frame_time = self.latest_frame_time
                 roi = self.roi
                 self.latest_frame = None
 
             if frame is None:
+                if roi is None:
+                    roi_active = False
                 self.msleep(PROCESS_SLEEP_MS)
                 continue
 
+            if roi is None:
+                roi_active = False
+                continue
+
+            if not roi_active:
+                fps_counter = FPSCounter()
+                roi_active = True
+
             detections = self._track_people_in_roi(frame, roi)
-            self.processed_signal.emit(self.camera_index, frame, detections)
+            self.processed_signal.emit(self.camera_index, frame, detections, frame_time)
             self.fps_signal.emit(self.camera_index, fps_counter.update())
 
     def _track_people_in_roi(self, frame, roi):
